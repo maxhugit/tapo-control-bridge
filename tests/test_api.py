@@ -1,12 +1,11 @@
 import importlib
-import json
 import sys
 from unittest.mock import MagicMock
 
 from fastapi.testclient import TestClient
 
 
-def load_app(monkeypatch):
+def load_app(monkeypatch, tmp_path=None):
     controller = MagicMock()
     controller.getDayNightMode.return_value = "auto"
     controller.setDayNightMode.return_value = {"error_code": 0}
@@ -17,18 +16,14 @@ def load_app(monkeypatch):
     controller.getAlarm.return_value = {"enabled": "off"}
     controller.getAudioConfig.return_value = {"speaker": {"volume": 50}}
     monkeypatch.setenv("API_TOKEN", "test-token")
-    monkeypatch.setenv(
-        "CAMERAS_JSON",
-        json.dumps(
-            {
-                "cuisine": {
-                    "host": "192.0.2.10",
-                    "username": "user",
-                    "password": "password",
-                }
-            }
-        ),
+    config_dir = tmp_path or __import__("pathlib").Path("/tmp")
+    config = config_dir / "tapo-control-bridge-test.xml"
+    config.write_text(
+        """<cameras><camera name="cuisine"><host>192.0.2.10</host>
+<username>user</username><password>password</password></camera></cameras>""",
+        encoding="utf-8",
     )
+    monkeypatch.setenv("CAMERAS_CONFIG_FILE", str(config))
     monkeypatch.setattr("pytapo.Tapo", lambda *args, **kwargs: controller)
     sys.modules.pop("app.main", None)
     module = importlib.import_module("app.main")
@@ -176,3 +171,38 @@ def test_camera_error_is_a_bad_gateway(monkeypatch):
     controller.getLED.side_effect = RuntimeError("unsupported")
     response = client.get("/api/v1/cameras/cuisine/led", headers=auth())
     assert response.status_code == 502
+
+
+def test_load_camera_xml(monkeypatch, tmp_path):
+    module, _, _ = load_app(monkeypatch)
+    config = tmp_path / "config.xml"
+    config.write_text(
+        """<?xml version="1.0"?>
+<cameras>
+  <camera name="cuisine">
+    <host>192.0.2.10</host>
+    <username>admin</username>
+    <password>secret</password>
+    <cloud_password>secret</cloud_password>
+    <control_port>443</control_port>
+  </camera>
+</cameras>
+""",
+        encoding="utf-8",
+    )
+    cameras = module.load_cameras_from_xml(str(config))
+    assert cameras["cuisine"].host == "192.0.2.10"
+    assert cameras["cuisine"].username == "admin"
+    assert cameras["cuisine"].control_port == 443
+
+
+def test_invalid_camera_xml(monkeypatch, tmp_path):
+    module, _, _ = load_app(monkeypatch)
+    config = tmp_path / "config.xml"
+    config.write_text("<wrong />", encoding="utf-8")
+    try:
+        module.load_cameras_from_xml(str(config))
+    except RuntimeError as exc:
+        assert "<cameras>" in str(exc)
+    else:
+        raise AssertionError("Invalid XML was accepted")

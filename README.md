@@ -31,19 +31,26 @@ returns HTTP `502` with the error reported by the camera.
 The service requires two environment variables:
 
 - `API_TOKEN`: a long random token used by Home Assistant.
-- `CAMERAS_JSON`: a JSON object keyed by the local camera name.
+- `CAMERAS_CONFIG_FILE`: the path of the XML configuration inside the
+  container, normally `/config/config.xml`.
 
-```json
-{
-  "cuisine": {
-    "host": "192.168.100.80",
-    "username": "camera-local-user",
-    "password": "replace-me"
-  }
-}
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<cameras>
+  <camera name="cuisine">
+    <host>192.168.100.80</host>
+    <username>admin</username>
+    <password>replace-me</password>
+    <cloud_password>replace-me</cloud_password>
+    <control_port>443</control_port>
+  </camera>
+</cameras>
 ```
 
-Optional camera fields are `cloud_password`, `child_id`, and `control_port`.
+`host`, `username`, and `password` are required. Optional XML elements are
+`cloud_password`, `child_id`, and `control_port` (defaults to `443`). Mount the
+file read-only and restrict its host permissions because it contains camera
+credentials. See `config.example.xml`.
 
 ## API
 
@@ -128,8 +135,9 @@ role.
 ## Unraid
 
 Use `ghcr.io/maxhugit/tapo-control-bridge:latest`, expose container port `8080`
-only on the LAN, and add `API_TOKEN` plus `CAMERAS_JSON` as environment
-variables. See `docker-compose.example.yml` for an example.
+only on the LAN, mount the host XML file as `/config/config.xml:ro`, and set
+`CAMERAS_CONFIG_FILE=/config/config.xml`. See `docker-compose.example.yml` for
+an example.
 
 ## Development
 

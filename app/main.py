@@ -1,5 +1,5 @@
-import json
 import os
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from threading import Lock
 from typing import Any, Literal
@@ -96,18 +96,51 @@ class CameraClient:
         return self.controller
 
 
-def load_cameras() -> dict[str, CameraClient]:
-    raw = os.environ.get("CAMERAS_JSON", "")
-    if not raw:
-        raise RuntimeError("CAMERAS_JSON is required")
+def load_cameras_from_xml(path: str) -> dict[str, CameraConfig]:
     try:
-        values = json.loads(raw)
-        return {
-            name: CameraClient(CameraConfig(**config))
-            for name, config in values.items()
-        }
-    except (json.JSONDecodeError, TypeError, ValueError) as exc:
-        raise RuntimeError("CAMERAS_JSON is invalid") from exc
+        root = ET.parse(path).getroot()
+    except (ET.ParseError, OSError) as exc:
+        raise RuntimeError(f"Unable to read camera XML configuration: {path}") from exc
+    if root.tag != "cameras":
+        raise RuntimeError("Camera XML root element must be <cameras>")
+
+    cameras: dict[str, CameraConfig] = {}
+    for element in root.findall("camera"):
+        name = (element.get("name") or "").strip()
+        if not name or name in cameras:
+            raise RuntimeError("Every camera must have a unique non-empty name")
+
+        def required(field: str) -> str:
+            value = (element.findtext(field) or "").strip()
+            if not value:
+                raise RuntimeError(f"Camera {name} is missing <{field}>")
+            return value
+
+        cameras[name] = CameraConfig(
+            host=required("host"),
+            username=required("username"),
+            password=required("password"),
+            cloud_password=(element.findtext("cloud_password") or "").strip(),
+            child_id=(element.findtext("child_id") or "").strip() or None,
+            control_port=int((element.findtext("control_port") or "443").strip()),
+        )
+    if not cameras:
+        raise RuntimeError("Camera XML configuration contains no cameras")
+    return cameras
+
+
+def load_camera_configs() -> dict[str, CameraConfig]:
+    config_file = os.environ.get("CAMERAS_CONFIG_FILE", "").strip()
+    if not config_file:
+        raise RuntimeError("CAMERAS_CONFIG_FILE is required")
+    return load_cameras_from_xml(config_file)
+
+
+def load_cameras() -> dict[str, CameraClient]:
+    return {
+        name: CameraClient(config)
+        for name, config in load_camera_configs().items()
+    }
 
 
 API_TOKEN = os.environ.get("API_TOKEN", "")

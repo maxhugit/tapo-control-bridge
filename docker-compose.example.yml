@@ -7,11 +7,6 @@ services:
       - "192.168.100.218:18080:8080"
     environment:
       API_TOKEN: "replace-with-a-long-random-token"
-      CAMERAS_JSON: >-
-        {
-          "cuisine": {
-            "host": "192.168.100.80",
-            "username": "replace-me",
-            "password": "replace-me"
-          }
-        }
+      CAMERAS_CONFIG_FILE: /config/config.xml
+    volumes:
+      - ./config.xml:/config/config.xml:ro

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<cameras>
+  <camera name="cuisine">
+    <host>192.168.100.80</host>
+    <username>admin</username>
+    <password>replace-me</password>
+    <cloud_password>replace-me</cloud_password>
+    <control_port>443</control_port>
+  </camera>
+</cameras>

@@ -253,7 +253,20 @@ async def set_alarm(camera_name: str, payload: AlarmConfigRequest) -> dict[str, 
 
 @app.post("/api/v1/cameras/{camera_name}/alarm/manual", dependencies=[Depends(authenticate)])
 async def manual_alarm(camera_name: str, payload: ManualAlarmRequest) -> dict[str, Any]:
-    await camera_call(camera_name, "startManualAlarm" if payload.action == "start" else "stopManualAlarm")
+    # Recent Tapo firmware renamed the inner request from manual_msg_alarm to
+    # manual_alarm. Try the current form first, then retain compatibility with
+    # older cameras through pytapo's legacy helper.
+    request = {
+        "method": "do",
+        "msg_alarm": {"manual_alarm": {"action": payload.action}},
+    }
+    try:
+        await camera_call(camera_name, "performRequest", request)
+    except HTTPException:
+        await camera_call(
+            camera_name,
+            "startManualAlarm" if payload.action == "start" else "stopManualAlarm",
+        )
     return response(camera_name, action=payload.action)
 
 

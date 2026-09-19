@@ -144,12 +144,30 @@ def test_alarm(monkeypatch):
     )
     assert response.status_code == 200
     controller.setAlarm.assert_called_once_with(True, True, False, 40, None, None)
-    client.post(
+    response = client.post(
         "/api/v1/cameras/cuisine/alarm/manual",
         headers=auth(),
         json={"action": "start"},
     )
-    controller.startManualAlarm.assert_called_once_with()
+    assert response.status_code == 200
+    controller.performRequest.assert_called_once_with(
+        {
+            "method": "do",
+            "msg_alarm": {"manual_alarm": {"action": "start"}},
+        }
+    )
+
+
+def test_alarm_falls_back_for_old_firmware(monkeypatch):
+    _, client, controller = load_app(monkeypatch)
+    controller.performRequest.side_effect = RuntimeError("unsupported")
+    response = client.post(
+        "/api/v1/cameras/cuisine/alarm/manual",
+        headers=auth(),
+        json={"action": "stop"},
+    )
+    assert response.status_code == 200
+    controller.stopManualAlarm.assert_called_once_with()
 
 
 def test_audio(monkeypatch):

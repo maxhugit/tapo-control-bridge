@@ -1,0 +1,17 @@
+services:
+  tapo-control-bridge:
+    image: ghcr.io/maxhugit/tapo-control-bridge:latest
+    container_name: tapo-control-bridge
+    restart: unless-stopped
+    ports:
+      - "192.168.100.218:18080:8080"
+    environment:
+      API_TOKEN: "replace-with-a-long-random-token"
+      CAMERAS_JSON: >-
+        {
+          "cuisine": {
+            "host": "192.168.100.80",
+            "username": "replace-me",
+            "password": "replace-me"
+          }
+        }

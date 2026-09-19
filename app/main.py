@@ -128,7 +128,7 @@ if not CONFIG_FILE:
 CONFIG = load_config(CONFIG_FILE)
 API_TOKEN = CONFIG.api_token
 CAMERAS = {name: CameraClient(config) for name, config in CONFIG.cameras.items()}
-app = FastAPI(title="Tapo Control Bridge", version="3.0.0")
+app = FastAPI(title="Tapo Control Bridge", version="3.0.1")
 
 
 def authenticate(authorization: str | None = Header(default=None)) -> None:
@@ -263,10 +263,26 @@ async def manual_alarm(camera_name: str, payload: ManualAlarmRequest) -> dict[st
     try:
         await camera_call(camera_name, "performRequest", request)
     except HTTPException:
-        await camera_call(
-            camera_name,
-            "startManualAlarm" if payload.action == "start" else "stopManualAlarm",
-        )
+        try:
+            await camera_call(
+                camera_name,
+                "startManualAlarm" if payload.action == "start" else "stopManualAlarm",
+            )
+        except HTTPException:
+            try:
+                await camera_call(
+                    camera_name, "setSirenStatus", payload.action == "start"
+                )
+            except HTTPException:
+                # C225 firmware exposes the built-in "Siren" as user-defined
+                # audio id 0. This is also the final fallback used by the
+                # Home Assistant Tapo Control integration.
+                await camera_call(
+                    camera_name,
+                    "testUsrDefAudio",
+                    0,
+                    payload.action == "start",
+                )
     return response(camera_name, action=payload.action)
 
 

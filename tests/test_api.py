@@ -170,6 +170,20 @@ def test_alarm_falls_back_for_old_firmware(monkeypatch):
     controller.stopManualAlarm.assert_called_once_with()
 
 
+def test_alarm_falls_back_to_c225_user_audio(monkeypatch):
+    _, client, controller = load_app(monkeypatch)
+    controller.performRequest.side_effect = RuntimeError("unsupported")
+    controller.startManualAlarm.side_effect = RuntimeError("unsupported")
+    controller.setSirenStatus.side_effect = RuntimeError("unsupported")
+    response = client.post(
+        "/api/v1/cameras/cuisine/alarm/manual",
+        headers=auth(),
+        json={"action": "start"},
+    )
+    assert response.status_code == 200
+    controller.testUsrDefAudio.assert_called_once_with(0, True)
+
+
 def test_audio(monkeypatch):
     _, client, controller = load_app(monkeypatch)
     response = client.put(

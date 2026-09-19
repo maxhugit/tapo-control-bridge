@@ -78,16 +78,22 @@ class CameraConfig:
 class CameraClient:
     def __init__(self, config: CameraConfig) -> None:
         self.lock = Lock()
-        self.controller = Tapo(
-            config.host,
-            config.username,
-            config.password,
-            cloudPassword=config.cloud_password,
-            childID=config.child_id,
-            controlPort=config.control_port,
-            printDebugInformation=False,
-            redactConfidentialInformation=True,
-        )
+        self.config = config
+        self.controller: Tapo | None = None
+
+    def get_controller(self) -> Tapo:
+        if self.controller is None:
+            self.controller = Tapo(
+                self.config.host,
+                self.config.username,
+                self.config.password,
+                cloudPassword=self.config.cloud_password,
+                childID=self.config.child_id,
+                controlPort=self.config.control_port,
+                printDebugInformation=False,
+                redactConfidentialInformation=True,
+            )
+        return self.controller
 
 
 def load_cameras() -> dict[str, CameraClient]:
@@ -126,7 +132,7 @@ def get_camera(name: str) -> CameraClient:
 
 def call(camera: CameraClient, method: str, *args: Any, **kwargs: Any) -> Any:
     with camera.lock:
-        return getattr(camera.controller, method)(*args, **kwargs)
+        return getattr(camera.get_controller(), method)(*args, **kwargs)
 
 
 async def camera_call(camera_name: str, method: str, *args: Any, **kwargs: Any) -> Any:

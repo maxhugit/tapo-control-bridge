@@ -6,7 +6,6 @@ services:
     ports:
       - "192.168.100.218:18080:8080"
     environment:
-      API_TOKEN: "replace-with-a-long-random-token"
-      CAMERAS_CONFIG_FILE: /config/config.xml
+      CONFIG_FILE: /config/config.json
     volumes:
-      - ./config.xml:/config/config.xml:ro
+      - ./config.json:/config/config.json:ro

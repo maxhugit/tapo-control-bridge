@@ -1,0 +1,12 @@
+{
+  "api_token": "replace-with-a-long-random-token",
+  "cameras": {
+    "cuisine": {
+      "host": "192.168.100.80",
+      "username": "admin",
+      "password": "replace-me",
+      "cloud_password": "replace-me",
+      "control_port": 443
+    }
+  }
+}

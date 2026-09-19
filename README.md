@@ -28,29 +28,32 @@ returns HTTP `502` with the error reported by the camera.
 
 ## Configuration
 
-The service requires two environment variables:
+The service requires one environment variable:
 
-- `API_TOKEN`: a long random token used by Home Assistant.
-- `CAMERAS_CONFIG_FILE`: the path of the XML configuration inside the
-  container, normally `/config/config.xml`.
+- `CONFIG_FILE`: the path of the JSON configuration inside the container,
+  normally `/config/config.json`.
 
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<cameras>
-  <camera name="cuisine">
-    <host>192.168.100.80</host>
-    <username>admin</username>
-    <password>replace-me</password>
-    <cloud_password>replace-me</cloud_password>
-    <control_port>443</control_port>
-  </camera>
-</cameras>
+The API token and all camera settings are stored in that JSON file:
+
+```json
+{
+  "api_token": "replace-with-a-long-random-token",
+  "cameras": {
+    "cuisine": {
+      "host": "192.168.100.80",
+      "username": "admin",
+      "password": "replace-me",
+      "cloud_password": "replace-me",
+      "control_port": 443
+    }
+  }
+}
 ```
 
-`host`, `username`, and `password` are required. Optional XML elements are
-`cloud_password`, `child_id`, and `control_port` (defaults to `443`). Mount the
-file read-only and restrict its host permissions because it contains camera
-credentials. See `config.example.xml`.
+`api_token` plus each camera's `host`, `username`, and `password` are required.
+Optional camera fields are `cloud_password`, `child_id`, and `control_port`
+(defaults to `443`). Mount the file read-only and restrict its host permissions
+because it contains all service secrets. See `config.example.json`.
 
 ## API
 
@@ -135,9 +138,9 @@ role.
 ## Unraid
 
 Use `ghcr.io/maxhugit/tapo-control-bridge:latest`, expose container port `8080`
-only on the LAN, mount the host XML file as `/config/config.xml:ro`, and set
-`CAMERAS_CONFIG_FILE=/config/config.xml`. See `docker-compose.example.yml` for
-an example.
+only on the LAN, mount the host JSON file as `/config/config.json:ro`, and set
+`CONFIG_FILE=/config/config.json`. See `docker-compose.example.yml` for an
+example.
 
 ## Development
 

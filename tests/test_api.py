@@ -1,4 +1,5 @@
 import importlib
+import json
 import sys
 from unittest.mock import MagicMock
 
@@ -15,15 +16,24 @@ def load_app(monkeypatch, tmp_path=None):
     controller.getAutoTrackTarget.return_value = {"enabled": "off"}
     controller.getAlarm.return_value = {"enabled": "off"}
     controller.getAudioConfig.return_value = {"speaker": {"volume": 50}}
-    monkeypatch.setenv("API_TOKEN", "test-token")
     config_dir = tmp_path or __import__("pathlib").Path("/tmp")
-    config = config_dir / "tapo-control-bridge-test.xml"
+    config = config_dir / "tapo-control-bridge-test.json"
     config.write_text(
-        """<cameras><camera name="cuisine"><host>192.0.2.10</host>
-<username>user</username><password>password</password></camera></cameras>""",
+        json.dumps(
+            {
+                "api_token": "test-token",
+                "cameras": {
+                    "cuisine": {
+                        "host": "192.0.2.10",
+                        "username": "user",
+                        "password": "password",
+                    }
+                },
+            }
+        ),
         encoding="utf-8",
     )
-    monkeypatch.setenv("CAMERAS_CONFIG_FILE", str(config))
+    monkeypatch.setenv("CONFIG_FILE", str(config))
     monkeypatch.setattr("pytapo.Tapo", lambda *args, **kwargs: controller)
     sys.modules.pop("app.main", None)
     module = importlib.import_module("app.main")
@@ -173,36 +183,40 @@ def test_camera_error_is_a_bad_gateway(monkeypatch):
     assert response.status_code == 502
 
 
-def test_load_camera_xml(monkeypatch, tmp_path):
+def test_load_json_config(monkeypatch, tmp_path):
     module, _, _ = load_app(monkeypatch)
-    config = tmp_path / "config.xml"
+    config = tmp_path / "config.json"
     config.write_text(
-        """<?xml version="1.0"?>
-<cameras>
-  <camera name="cuisine">
-    <host>192.0.2.10</host>
-    <username>admin</username>
-    <password>secret</password>
-    <cloud_password>secret</cloud_password>
-    <control_port>443</control_port>
-  </camera>
-</cameras>
-""",
+        json.dumps(
+            {
+                "api_token": "secret-token",
+                "cameras": {
+                    "cuisine": {
+                        "host": "192.0.2.10",
+                        "username": "admin",
+                        "password": "secret",
+                        "cloud_password": "secret",
+                        "control_port": 443,
+                    }
+                },
+            }
+        ),
         encoding="utf-8",
     )
-    cameras = module.load_cameras_from_xml(str(config))
-    assert cameras["cuisine"].host == "192.0.2.10"
-    assert cameras["cuisine"].username == "admin"
-    assert cameras["cuisine"].control_port == 443
+    loaded = module.load_config(str(config))
+    assert loaded.api_token == "secret-token"
+    assert loaded.cameras["cuisine"].host == "192.0.2.10"
+    assert loaded.cameras["cuisine"].username == "admin"
+    assert loaded.cameras["cuisine"].control_port == 443
 
 
-def test_invalid_camera_xml(monkeypatch, tmp_path):
+def test_invalid_json_config(monkeypatch, tmp_path):
     module, _, _ = load_app(monkeypatch)
-    config = tmp_path / "config.xml"
-    config.write_text("<wrong />", encoding="utf-8")
+    config = tmp_path / "config.json"
+    config.write_text("{}", encoding="utf-8")
     try:
-        module.load_cameras_from_xml(str(config))
+        module.load_config(str(config))
     except RuntimeError as exc:
-        assert "<cameras>" in str(exc)
+        assert "Invalid JSON" in str(exc)
     else:
-        raise AssertionError("Invalid XML was accepted")
+        raise AssertionError("Invalid JSON was accepted")

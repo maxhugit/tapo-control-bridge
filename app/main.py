@@ -1,5 +1,5 @@
+import json
 import os
-import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from threading import Lock
 from typing import Any, Literal
@@ -75,6 +75,12 @@ class CameraConfig:
     control_port: int = 443
 
 
+@dataclass(frozen=True)
+class AppConfig:
+    api_token: str
+    cameras: dict[str, CameraConfig]
+
+
 class CameraClient:
     def __init__(self, config: CameraConfig) -> None:
         self.lock = Lock()
@@ -96,59 +102,33 @@ class CameraClient:
         return self.controller
 
 
-def load_cameras_from_xml(path: str) -> dict[str, CameraConfig]:
+def load_config(path: str) -> AppConfig:
     try:
-        root = ET.parse(path).getroot()
-    except (ET.ParseError, OSError) as exc:
-        raise RuntimeError(f"Unable to read camera XML configuration: {path}") from exc
-    if root.tag != "cameras":
-        raise RuntimeError("Camera XML root element must be <cameras>")
-
-    cameras: dict[str, CameraConfig] = {}
-    for element in root.findall("camera"):
-        name = (element.get("name") or "").strip()
-        if not name or name in cameras:
-            raise RuntimeError("Every camera must have a unique non-empty name")
-
-        def required(field: str) -> str:
-            value = (element.findtext(field) or "").strip()
-            if not value:
-                raise RuntimeError(f"Camera {name} is missing <{field}>")
-            return value
-
-        cameras[name] = CameraConfig(
-            host=required("host"),
-            username=required("username"),
-            password=required("password"),
-            cloud_password=(element.findtext("cloud_password") or "").strip(),
-            child_id=(element.findtext("child_id") or "").strip() or None,
-            control_port=int((element.findtext("control_port") or "443").strip()),
-        )
+        with open(path, encoding="utf-8") as handle:
+            raw = json.load(handle)
+        api_token = str(raw["api_token"]).strip()
+        raw_cameras = raw["cameras"]
+        cameras = {
+            str(name): CameraConfig(**values)
+            for name, values in raw_cameras.items()
+        }
+    except (OSError, json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
+        raise RuntimeError(f"Invalid JSON configuration: {path}") from exc
+    if not api_token:
+        raise RuntimeError("api_token must not be empty")
     if not cameras:
-        raise RuntimeError("Camera XML configuration contains no cameras")
-    return cameras
+        raise RuntimeError("JSON configuration contains no cameras")
+    return AppConfig(api_token=api_token, cameras=cameras)
 
 
-def load_camera_configs() -> dict[str, CameraConfig]:
-    config_file = os.environ.get("CAMERAS_CONFIG_FILE", "").strip()
-    if not config_file:
-        raise RuntimeError("CAMERAS_CONFIG_FILE is required")
-    return load_cameras_from_xml(config_file)
+CONFIG_FILE = os.environ.get("CONFIG_FILE", "").strip()
+if not CONFIG_FILE:
+    raise RuntimeError("CONFIG_FILE is required")
 
-
-def load_cameras() -> dict[str, CameraClient]:
-    return {
-        name: CameraClient(config)
-        for name, config in load_camera_configs().items()
-    }
-
-
-API_TOKEN = os.environ.get("API_TOKEN", "")
-if not API_TOKEN:
-    raise RuntimeError("API_TOKEN is required")
-
-CAMERAS = load_cameras()
-app = FastAPI(title="Tapo Control Bridge", version="2.0.0")
+CONFIG = load_config(CONFIG_FILE)
+API_TOKEN = CONFIG.api_token
+CAMERAS = {name: CameraClient(config) for name, config in CONFIG.cameras.items()}
+app = FastAPI(title="Tapo Control Bridge", version="3.0.0")
 
 
 def authenticate(authorization: str | None = Header(default=None)) -> None:
